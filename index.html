@@ -143,28 +143,6 @@
         const photoTextures = [];
         photoFiles.forEach((f, i) => photoTextures[i] = loader.load(f));
 
-        function setTextureCover(mesh, image) {
-            const tex = mesh.material.map;
-
-            const imageAspect = image.width / image.height;
-            const planeAspect = mesh.geometry.parameters.width / mesh.geometry.parameters.height;
-
-            if (imageAspect > planeAspect) {
-                // Ảnh rộng → cắt ngang
-                const scale = planeAspect / imageAspect;
-                tex.repeat.set(scale, 1);
-                tex.offset.set((1 - scale) / 2, 0);
-            } else {
-                // Ảnh cao → cắt dọc
-                const scale = imageAspect / planeAspect;
-                tex.repeat.set(1, scale);
-                tex.offset.set(0, (1 - scale) / 2);
-            }
-
-            tex.needsUpdate = true;
-        }
-
-
         function createCustomTexture(type) {
             const canvas = document.createElement('canvas');
             canvas.width = 128; canvas.height = 128;
@@ -335,14 +313,46 @@
             return points;
         }
 
+        function applyCover(texture, planeWidth, planeHeight) {
+            const img = texture.image;
+            const imgRatio = img.width / img.height;
+            const planeRatio = planeWidth / planeHeight;
+
+            texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+
+            if (imgRatio > planeRatio) {
+                // ảnh rộng hơn → crop ngang
+                const scale = planeRatio / imgRatio;
+                texture.repeat.set(scale, 1);
+                texture.offset.set((1 - scale) / 2, 0);
+            } else {
+                // ảnh cao hơn → crop dọc
+                const scale = imgRatio / planeRatio;
+                texture.repeat.set(1, scale);
+                texture.offset.set(0, (1 - scale) / 2);
+            }
+
+            texture.needsUpdate = true;
+        }
+
+
         function createPhotos() {
-            const geo = new THREE.PlaneGeometry(8, 8);
+            const PLANE_W = 8;
+            const PLANE_H = 8;
+
+            const geo = new THREE.PlaneGeometry(PLANE_W, PLANE_H);
             const borderGeo = new THREE.PlaneGeometry(9, 9);
             const borderMat = new THREE.MeshBasicMaterial({ color: 0xFFD700 });
 
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < photoTextures.length; i++) {
                 const tex = photoTextures[i];
-                tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+
+                // 👇 quan trọng
+                if (tex.image) {
+                    applyCover(tex, PLANE_W, PLANE_H);
+                } else {
+                    tex.onUpdate = () => applyCover(tex, PLANE_W, PLANE_H);
+                }
 
                 const mat = new THREE.MeshBasicMaterial({
                     map: tex,
@@ -351,16 +361,18 @@
 
                 const mesh = new THREE.Mesh(geo, mat);
 
-                tex.image && setTextureCover(mesh, tex.image);
-
                 const border = new THREE.Mesh(borderGeo, borderMat);
                 border.position.z = -0.1;
                 mesh.add(border);
-                mesh.visible = false; mesh.scale.set(0, 0, 0);
+
+                mesh.visible = false;
+                mesh.scale.set(0, 0, 0);
+
                 scene.add(mesh);
                 photoMeshes.push(mesh);
             }
         }
+
 
         function createDecorations() {
             // MERRY CHRISTMAS Vandiep
